@@ -445,4 +445,152 @@ describe('features/modeling - move start event behavior', function() {
 
   });
 
+  describe('Exchanging expanded and collapsed Elements', function() {
+
+    var diagramXML = require('../../../../fixtures/bpmn/import/collapsed/processWithChildren.bpmn');
+
+    beforeEach(bootstrapModeler(diagramXML, { modules: testModules }));
+
+    describe('expand', function() {
+
+      it('show all children, but hide empty labels',
+        inject(function(elementRegistry, bpmnReplace) {
+
+          // given
+          var collapsedSubProcess = elementRegistry.get('SubProcess_1');
+          var originalChildren = collapsedSubProcess.children.slice();
+
+          // when
+          var expandedSubProcess = bpmnReplace.replaceElement(collapsedSubProcess,
+            {
+              type: 'bpmn:SubProcess',
+              isExpanded: true
+            }
+          );
+
+          // then
+          originalChildren.forEach(function(c) {
+            expect(expandedSubProcess.children).to.include(c);
+          });
+          expect(expandedSubProcess.children).to.satisfy(allShown());
+
+        }));
+
+
+      describe('undo', function() {
+
+        it('hide all children',
+          inject(function(elementRegistry, bpmnReplace, commandStack) {
+
+            // given
+            var collapsedSubProcess = elementRegistry.get('SubProcess_1');
+            var originalChildren = collapsedSubProcess.children.slice();
+
+            bpmnReplace.replaceElement(collapsedSubProcess,
+              {
+                type: 'bpmn:SubProcess',
+                isExpanded: true
+              }
+            );
+
+            // when
+            commandStack.undo();
+
+            // then
+            originalChildren.forEach(function(c) {
+              expect(collapsedSubProcess.children).to.include(c);
+            });
+            expect(collapsedSubProcess.children).to.satisfy(allHidden());
+
+          }));
+      });
+
+    });
+
+    describe('collapse', function() {
+
+
+      it('hide all children',
+       inject(function(elementRegistry, bpmnReplace) {
+
+         // given
+         var expandedSubProcess = elementRegistry.get('SubProcess_2');
+         var originalChildren = expandedSubProcess.children.slice();
+
+         // when
+         var collapsedSubProcess = bpmnReplace.replaceElement(expandedSubProcess,
+           {
+             type: 'bpmn:SubProcess',
+             isExpanded: false
+           }
+         );
+
+         // then
+         originalChildren.forEach(function(c) {
+           expect(collapsedSubProcess.children).to.include(c);
+         });
+         expect(collapsedSubProcess.children).to.satisfy(allHidden());
+
+       }));
+
+
+      describe('undo', function() {
+
+
+        it('show elments that where visible',
+           inject(function(elementRegistry, bpmnReplace, commandStack) {
+
+             // given
+             var expandedSubProcess = elementRegistry.get('SubProcess_2');
+             var originalChildren = expandedSubProcess.children.slice();
+
+             bpmnReplace.replaceElement(expandedSubProcess,
+               {
+                 type: 'bpmn:SubProcess',
+                 isExpanded: false
+               }
+             );
+
+             // when
+             commandStack.undo();
+
+             // then
+             originalChildren.forEach(function(c) {
+               expect(expandedSubProcess.children).to.include(c);
+             });
+             expect(expandedSubProcess.children).to.satisfy(allShown());
+
+           }));
+
+      });
+
+    });
+  });
 });
+
+
+
+/////////// helpers /////////////////////////////
+
+
+function allHidden() {
+  return childrenHidden(true);
+}
+
+function allShown() {
+  return childrenHidden(false);
+}
+
+function childrenHidden(hidden) {
+  return function(children) {
+    return children.every(function(child) {
+      // empty labels are allways hidden
+      if (child.type === 'label' && !child.businessObject.name) {
+        return child.hidden;
+      }
+      else {
+        return child.hidden == hidden;
+      }
+    });
+  };
+}
