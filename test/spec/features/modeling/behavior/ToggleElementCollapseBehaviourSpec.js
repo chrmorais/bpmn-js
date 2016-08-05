@@ -31,11 +31,11 @@ describe('features/modeling - collapse and expand elements', function() {
     };
 
 
-    it('properties are set correctly',
+    it('collapsed-marker is removed',
       inject(function(elementRegistry, bpmnReplace) {
 
         // given
-        var collapsedSubProcess = elementRegistry.get('SubProcess_1');
+        var collapsedSubProcess = elementRegistry.get('SubProcess_3');
 
         // when
         var expandedSubProcess = bpmnReplace.replaceElement(collapsedSubProcess,
@@ -44,13 +44,9 @@ describe('features/modeling - collapse and expand elements', function() {
             isExpanded: true
           }
         );
-
-        // then properties are set
-        expect(expandedSubProcess.collapsed).to.eql(false);
-        expect(expandedSubProcess.isExpanded).to.eql(true);
-
         var businessObject = expandedSubProcess.businessObject;
-        // verifys +-marker is removed
+
+        // then +-marker is removed
         expect(businessObject.di.isExpanded).to.eql(true);
       })
     );
@@ -71,10 +67,12 @@ describe('features/modeling - collapse and expand elements', function() {
           }
         );
 
-        // then
+        // then keep children
         originalChildren.forEach(function(c) {
           expect(expandedSubProcess.children).to.include(c);
         });
+
+        // and show them
         expect(expandedSubProcess.children).to.satisfy(allShown());
       })
     );
@@ -84,10 +82,10 @@ describe('features/modeling - collapse and expand elements', function() {
       inject(function(elementRegistry, bpmnReplace) {
 
         // given
-        var collapsedSubProcess = elementRegistry.get('SubProcess_4');
+        var collapsedAdHocSubProcess = elementRegistry.get('SubProcess_4');
 
         // when
-        var expandedSubProcess = bpmnReplace.replaceElement(collapsedSubProcess,
+        var expandedAdHocSubProcess = bpmnReplace.replaceElement(collapsedAdHocSubProcess,
           {
             type: 'bpmn:SubProcess',
             isExpanded: true
@@ -95,8 +93,8 @@ describe('features/modeling - collapse and expand elements', function() {
         );
 
         // then
-        expect(is(expandedSubProcess, 'bpmn:AdHocSubProcess')).to.eql(true);
-        var businessObject = expandedSubProcess.businessObject;
+        expect(is(expandedAdHocSubProcess, 'bpmn:AdHocSubProcess')).to.eql(true);
+        var businessObject = expandedAdHocSubProcess.businessObject;
         expect(businessObject.loopCharacteristics).to.not.be.undefined;
       })
     );
@@ -123,10 +121,9 @@ describe('features/modeling - collapse and expand elements', function() {
             }
           );
 
-          // then
+          // then hidden child should not be covered
           expect(expandedSubProcess.x).to.be.greaterThan(hiddenStartEvent.x);
           expect(expandedSubProcess.y).to.be.greaterThan(hiddenStartEvent.y);
-
         })
       );
 
@@ -195,13 +192,43 @@ describe('features/modeling - collapse and expand elements', function() {
         })
       );
 
+
+      it('to expanding collapsedSubProcess is coverd in childrenBoundingBox',
+        inject(function(elementRegistry, bpmnReplace) {
+
+          // given
+          var collapsedSubProcess = elementRegistry.get('SubProcess_5');
+          var collapsedDownRightCorner = {
+            x: collapsedSubProcess.x + collapsedSubProcess.width,
+            y: collapsedSubProcess.y + collapsedSubProcess.height
+          };
+
+          // when
+          var expandedSubProcess = bpmnReplace.replaceElement(collapsedSubProcess,
+            {
+              type: 'bpmn:SubProcess',
+              isExpanded: true
+            }
+          );
+
+          // then
+          var expandedDownRightCorner = {
+            x: expandedSubProcess.x + expandedSubProcess.width,
+            y: expandedSubProcess.y + expandedSubProcess.height
+          };
+
+          expect(expandedDownRightCorner.x).to.be.at.least(collapsedDownRightCorner.x);
+          expect(expandedDownRightCorner.y).to.be.at.least(collapsedDownRightCorner.y);
+        })
+      );
+
     });
 
 
     describe('undo', function() {
 
 
-      it('properties are reverted correctly',
+      it('collapsed-marker is placed',
         inject(function(elementRegistry, bpmnReplace, commandStack) {
 
           // given
@@ -215,27 +242,19 @@ describe('features/modeling - collapse and expand elements', function() {
 
           // when
           commandStack.undo();
-
-          // then ref remains
-          expect(expandedSubProcess).to.eql(collapsedSubProcess);
-
-          // and properties are set
-          expect(expandedSubProcess.collapsed).to.eql(true);
-          expect(expandedSubProcess.isExpanded).to.eql(false);
-
           var businessObject = expandedSubProcess.businessObject;
-          // verifys +-marker is placed
+
+          // then +-marker is placed
           expect(businessObject.di.isExpanded).to.eql(false);
         })
       );
 
 
-      it('hide children and restore previous size',
+      it('restore previous bounds',
         inject(function(elementRegistry, bpmnReplace, commandStack) {
 
           // given
           var collapsedSubProcess = elementRegistry.get('SubProcess_1');
-          var originalChildren = collapsedSubProcess.children.slice();
           var originalBounds = {
             x: collapsedSubProcess.x,
             y: collapsedSubProcess.y,
@@ -243,7 +262,7 @@ describe('features/modeling - collapse and expand elements', function() {
             height: collapsedSubProcess.height
           };
 
-          var expandedSubProcess = bpmnReplace.replaceElement(collapsedSubProcess,
+          bpmnReplace.replaceElement(collapsedSubProcess,
             {
               type: 'bpmn:SubProcess',
               isExpanded: true
@@ -253,14 +272,35 @@ describe('features/modeling - collapse and expand elements', function() {
           // when
           commandStack.undo();
 
-          // then same ref and keep children
-          expect(expandedSubProcess).to.eql(collapsedSubProcess);
+          // then
+          expect(collapsedSubProcess).to.have.bounds(originalBounds);
+        })
+      );
+
+
+      it('hide children',
+        inject(function(elementRegistry, bpmnReplace, commandStack) {
+
+          // given
+          var collapsedSubProcess = elementRegistry.get('SubProcess_1');
+          var originalChildren = collapsedSubProcess.children.slice();
+
+          bpmnReplace.replaceElement(collapsedSubProcess,
+            {
+              type: 'bpmn:SubProcess',
+              isExpanded: true
+            }
+          );
+
+          // when
+          commandStack.undo();
+
+          // then keep children
           originalChildren.forEach(function(c) {
             expect(collapsedSubProcess.children).to.include(c);
           });
-          // and children hidden and same bounds
+          // and hide them
           expect(collapsedSubProcess.children).to.satisfy(allHidden());
-          expect(collapsedSubProcess).to.have.bounds(originalBounds);
         })
       );
 
@@ -277,7 +317,7 @@ describe('features/modeling - collapse and expand elements', function() {
     };
 
 
-    it('properties are set correctly',
+    it('collapsed-marker is placed',
       inject(function(elementRegistry, bpmnReplace) {
 
         // given
@@ -290,13 +330,9 @@ describe('features/modeling - collapse and expand elements', function() {
             isExpanded: false
           }
         );
-
-        // then properties are set
-        expect(collapsedSubProcess.collapsed).to.eql(true);
-        expect(collapsedSubProcess.isExpanded).to.eql(false);
-
         var businessObject = collapsedSubProcess.businessObject;
-        // verifys +-marker is set
+
+        // then +-marker is set
         expect(businessObject.di.isExpanded).to.eql(false);
       })
     );
@@ -317,11 +353,12 @@ describe('features/modeling - collapse and expand elements', function() {
          }
        );
 
-       // then
-       expect(collapsedSubProcess).to.eql(expandedSubProcess);
+       // then keep children
        originalChildren.forEach(function(c) {
          expect(collapsedSubProcess.children).to.include(c);
        });
+
+       // and hide them
        expect(collapsedSubProcess.children).to.satisfy(allHidden());
      })
     );
@@ -389,7 +426,7 @@ describe('features/modeling - collapse and expand elements', function() {
     describe('undo', function() {
 
 
-      it('properties are reverted correctly',
+      it('collapsed marker is removed',
         inject(function(elementRegistry, bpmnReplace, commandStack) {
 
           // given
@@ -403,17 +440,38 @@ describe('features/modeling - collapse and expand elements', function() {
 
           // when
           commandStack.undo();
-
-          // then ref remains
-          expect(collapsedSubProcess).to.eql(expandedSubProcess);
-
-          // and properties are set
-          expect(collapsedSubProcess.collapsed).to.eql(false);
-          expect(collapsedSubProcess.isExpanded).to.eql(true);
-
           var businessObject = collapsedSubProcess.businessObject;
-          // verifys +-marker is placed
+
+          // then +-marker is placed
           expect(businessObject.di.isExpanded).to.eql(true);
+        })
+      );
+
+
+      it('originalBounds are restored',
+        inject(function(elementRegistry, bpmnReplace, commandStack) {
+
+          // given
+          var expandedSubProcess = elementRegistry.get('SubProcess_2');
+          var originalBounds = {
+            x: expandedSubProcess.x,
+            y: expandedSubProcess.y,
+            width: expandedSubProcess.width,
+            height: expandedSubProcess.height
+          };
+
+          bpmnReplace.replaceElement(expandedSubProcess,
+            {
+              type: 'bpmn:SubProcess',
+              isExpanded: false
+            }
+          );
+
+          // when
+          commandStack.undo();
+
+          // then
+          expect(expandedSubProcess).to.have.bounds(originalBounds);
         })
       );
 
@@ -424,14 +482,8 @@ describe('features/modeling - collapse and expand elements', function() {
           // given
           var expandedSubProcess = elementRegistry.get('SubProcess_2');
           var originalChildren = expandedSubProcess.children.slice();
-          var originalBounds = {
-            x: expandedSubProcess.x,
-            y: expandedSubProcess.y,
-            width: expandedSubProcess.width,
-            height: expandedSubProcess.height
-          };
 
-          var collapsedSubProcess = bpmnReplace.replaceElement(expandedSubProcess,
+          bpmnReplace.replaceElement(expandedSubProcess,
             {
               type: 'bpmn:SubProcess',
               isExpanded: false
@@ -441,25 +493,24 @@ describe('features/modeling - collapse and expand elements', function() {
           // when
           commandStack.undo();
 
-          // then same ref and keep children
-          expect(expandedSubProcess).to.eql(collapsedSubProcess);
+          // then keep children
           originalChildren.forEach(function(c) {
             expect(expandedSubProcess.children).to.include(c);
           });
 
-          // children hidden and same bounds
+          // and show the previously visible ones
           expect(expandedSubProcess.children).to.satisfy(allShown());
-          expect(expandedSubProcess).to.have.bounds(originalBounds);
         })
       );
 
     });
   });
 
+
   describe('attaching marker', function() {
 
 
-    describe('collapse', function() {
+    describe('collapsed', function() {
 
 
       it('add ad-hoc-marker does not call toggleProvider',
@@ -514,14 +565,14 @@ describe('features/modeling - collapse and expand elements', function() {
     });
 
 
-    describe('expand', function() {
+    describe('expanded', function() {
 
 
       it('add ad-hoc-marker does not call toggleProvider',
         inject(function(eventBus, bpmnReplace, elementRegistry) {
 
           // given
-          var collapsedSubProcess = elementRegistry.get('SubProcess_6');
+          var expandedSubProcess = elementRegistry.get('SubProcess_6');
 
           // should not be called
           eventBus.once('commandStack.shape.toggleCollapse.execute', function(e) {
@@ -529,7 +580,7 @@ describe('features/modeling - collapse and expand elements', function() {
           });
 
           // when
-          bpmnReplace.replaceElement(collapsedSubProcess,
+          bpmnReplace.replaceElement(expandedSubProcess,
             {
               type: 'bpmn:AdHocSubProcess',
               isExpanded: true
@@ -546,7 +597,7 @@ describe('features/modeling - collapse and expand elements', function() {
         inject(function(eventBus, bpmnReplace, elementRegistry) {
 
           // given
-          var collapsedSubProcess = elementRegistry.get('SubProcess_2');
+          var expandedSubProcess = elementRegistry.get('SubProcess_2');
 
           // should not be called
           eventBus.once('commandStack.shape.toggleCollapse.execute', function(e) {
@@ -554,7 +605,7 @@ describe('features/modeling - collapse and expand elements', function() {
           });
 
           // when
-          bpmnReplace.replaceElement(collapsedSubProcess,
+          bpmnReplace.replaceElement(expandedSubProcess,
             {
               type: 'bpmn:SubProcess',
               isExpanded: true
